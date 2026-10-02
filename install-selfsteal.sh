@@ -5,8 +5,8 @@ set -e
 REMNANODE_DIR="/opt/remnanode"
 TEMPLATES_DIR="$REMNANODE_DIR/templates"
 
-INDEX_URL="https://raw.githubusercontent.com/WallD3v/remnanode-simple/refs/heads/main/templates/index.html"
-NGINX_URL="https://raw.githubusercontent.com/WallD3v/remnanode-simple/refs/heads/main/templates/default"
+INDEX_URL="https://raw.githubusercontent.com/WallD3v/remnanode-simple/refs/heads/main/templates/index.html?token=GHSAT0AAAAAAELADFACT73GSZKQPW2OAA5K2V7TQVA"
+NGINX_URL="https://raw.githubusercontent.com/WallD3v/remnanode-simple/refs/heads/main/templates/default?token=GHSAT0AAAAAAELADFACHXX2S5H2ODUODHEG2V7TRFQ"
 
 NGINX_CONFIG="/etc/nginx/sites-available/default"
 
@@ -48,16 +48,14 @@ install_dependencies() {
     info "Checking dependencies..."
 
     apt update -y
-
-    apt install -y \
-        curl \
-        wget \
-        nginx \
-        nano
+    apt install -y curl wget nginx nano
 
     if ! command -v docker >/dev/null 2>&1; then
         info "Installing Docker..."
-        curl -fsSL https://get.docker.com | sh
+
+        if ! curl -fsSL https://get.docker.com | sh; then
+            error "Failed to install Docker."
+        fi
     else
         info "Docker is already installed."
     fi
@@ -85,6 +83,7 @@ install_node() {
     nano "$REMNANODE_DIR/docker-compose.yml"
 
     if [ ! -s "$REMNANODE_DIR/docker-compose.yml" ]; then
+        rm -f "$REMNANODE_DIR/docker-compose.yml"
         error "docker-compose.yml is empty."
     fi
 
@@ -98,19 +97,16 @@ install_node() {
 
     info "Starting RemnaNode..."
 
-    docker compose up -d
+    if ! docker compose up -d; then
+        error "Failed to start RemnaNode."
+    fi
 
     info "RemnaNode installed successfully."
 }
 
-install_template() {
-    echo
-    title "======================================"
-    title "        Installing Template"
-    title "======================================"
-    echo
-
+ask_domain() {
     while true; do
+        echo
         read -r -p "Enter node domain (example: nl.wumvpn.cc): " DOMAIN
 
         DOMAIN=$(echo "$DOMAIN" | tr -d '[:space:]')
@@ -123,24 +119,56 @@ install_template() {
     done
 
     info "Using domain: $DOMAIN"
+}
+
+download_file() {
+    local url="$1"
+    local destination="$2"
+    local name="$3"
+
+    rm -f "$destination"
+
+    info "Downloading $name..."
+
+    if ! wget -O "$destination" "$url"; then
+        rm -f "$destination"
+        error "Failed to download $name from: $url"
+    fi
+
+    if [ ! -s "$destination" ]; then
+        rm -f "$destination"
+        error "$name was downloaded, but file is empty."
+    fi
+}
+
+install_template() {
+    echo
+    title "======================================"
+    title "        Installing Template"
+    title "======================================"
+    echo
+
+    ask_domain
 
     mkdir -p "$TEMPLATES_DIR"
 
-    info "Downloading index.html..."
+    download_file \
+        "$INDEX_URL" \
+        "$TEMPLATES_DIR/index.html" \
+        "index.html"
 
-    wget -q \
-        -O "$TEMPLATES_DIR/index.html" \
-        "$INDEX_URL"
-
-    info "Downloading nginx config..."
-
-    wget -q \
-        -O "$NGINX_CONFIG" \
-        "$NGINX_URL"
+    download_file \
+        "$NGINX_URL" \
+        "$NGINX_CONFIG" \
+        "nginx config"
 
     info "Replacing nl.wumvpn.cc with $DOMAIN..."
 
     sed -i "s/nl\.wumvpn\.cc/$DOMAIN/g" "$NGINX_CONFIG"
+
+    if ! grep -q "$DOMAIN" "$NGINX_CONFIG"; then
+        error "Domain replacement failed."
+    fi
 
     if [ ! -e /etc/nginx/sites-enabled/default ]; then
         info "Enabling nginx config..."
@@ -158,15 +186,17 @@ install_template() {
 
     info "Restarting nginx..."
 
-    systemctl restart nginx
+    if ! systemctl restart nginx; then
+        error "Failed to restart nginx."
+    fi
 
-    info "Template installed successfully for:"
+    info "Template installed successfully."
     echo
-    echo "    https://$DOMAIN"
-    echo
+    echo "Domain: https://$DOMAIN"
 }
 
 reinstall_node() {
+    echo
     warn "Reinstalling RemnaNode..."
 
     if [ -f "$REMNANODE_DIR/docker-compose.yml" ]; then
@@ -182,6 +212,7 @@ reinstall_node() {
 }
 
 reinstall_template() {
+    echo
     warn "Reinstalling template..."
 
     rm -rf "$TEMPLATES_DIR"
@@ -190,77 +221,92 @@ reinstall_template() {
     install_template
 }
 
+restart_node() {
+    if [ ! -f "$REMNANODE_DIR/docker-compose.yml" ]; then
+        error "docker-compose.yml not found."
+    fi
+
+    cd "$REMNANODE_DIR"
+
+    info "Restarting RemnaNode..."
+
+    docker compose down
+    docker compose up -d
+
+    info "RemnaNode restarted."
+}
+
+restart_nginx() {
+    info "Checking nginx config..."
+
+    nginx -t || error "Nginx config contains errors."
+
+    info "Restarting nginx..."
+
+    systemctl restart nginx
+
+    info "Nginx restarted."
+}
+
+show_logs() {
+    if [ ! -f "$REMNANODE_DIR/docker-compose.yml" ]; then
+        error "docker-compose.yml not found."
+    fi
+
+    cd "$REMNANODE_DIR"
+
+    docker compose logs -f -t
+}
+
 show_menu() {
-    echo
-    title "======================================"
-    title "       RemnaNode already installed"
-    title "======================================"
-    echo
+    while true; do
+        echo
+        title "======================================"
+        title "       RemnaNode already installed"
+        title "======================================"
+        echo
 
-    echo "1) Reinstall RemnaNode"
-    echo "2) Reinstall template"
-    echo "3) Reinstall everything"
-    echo "4) Restart RemnaNode"
-    echo "5) Restart nginx"
-    echo "6) Show RemnaNode logs"
-    echo "7) Exit"
+        echo "1) Reinstall RemnaNode"
+        echo "2) Reinstall template"
+        echo "3) Reinstall everything"
+        echo "4) Restart RemnaNode"
+        echo "5) Restart nginx"
+        echo "6) Show RemnaNode logs"
+        echo "7) Exit"
 
-    echo
+        echo
 
-    read -r -p "Select option: " CHOICE
+        read -r -p "Select option: " CHOICE
 
-    case "$CHOICE" in
-
-        1)
-            reinstall_node
-            ;;
-
-        2)
-            reinstall_template
-            ;;
-
-        3)
-            reinstall_node
-            reinstall_template
-            ;;
-
-        4)
-            info "Restarting RemnaNode..."
-
-            cd "$REMNANODE_DIR"
-
-            docker compose down
-            docker compose up -d
-
-            info "RemnaNode restarted."
-            ;;
-
-        5)
-            info "Restarting nginx..."
-
-            nginx -t
-            systemctl restart nginx
-
-            info "Nginx restarted."
-            ;;
-
-        6)
-            cd "$REMNANODE_DIR"
-
-            docker compose logs -f -t
-            ;;
-
-        7)
-            info "Bye!"
-            exit 0
-            ;;
-
-        *)
-            warn "Invalid option."
-            show_menu
-            ;;
-
-    esac
+        case "$CHOICE" in
+            1)
+                reinstall_node
+                ;;
+            2)
+                reinstall_template
+                ;;
+            3)
+                reinstall_node
+                reinstall_template
+                ;;
+            4)
+                restart_node
+                ;;
+            5)
+                restart_nginx
+                ;;
+            6)
+                show_logs
+                ;;
+            7)
+                info "Bye!"
+                exit 0
+                ;;
+            *)
+                warn "Invalid option."
+                ;;
+        esac
+    done
 }
 
 main() {
@@ -278,14 +324,14 @@ main() {
     NODE_INSTALLED=false
     TEMPLATE_INSTALLED=false
 
-    if [ -d "$REMNANODE_DIR" ]; then
+    if [ -f "$REMNANODE_DIR/docker-compose.yml" ]; then
         NODE_INSTALLED=true
         info "RemnaNode installation detected."
     else
         warn "RemnaNode is not installed."
     fi
 
-    if [ -d "$TEMPLATES_DIR" ]; then
+    if [ -f "$TEMPLATES_DIR/index.html" ] && [ -f "$NGINX_CONFIG" ]; then
         TEMPLATE_INSTALLED=true
         info "Template installation detected."
     else
@@ -294,27 +340,18 @@ main() {
 
     echo
 
-    # Nothing installed
     if [ "$NODE_INSTALLED" = false ] && [ "$TEMPLATE_INSTALLED" = false ]; then
-
         install_node
         install_template
 
-    # Node missing
     elif [ "$NODE_INSTALLED" = false ]; then
-
         install_node
 
-    # Template missing
     elif [ "$TEMPLATE_INSTALLED" = false ]; then
-
         install_template
 
-    # Everything installed
     else
-
         show_menu
-
     fi
 
     echo
