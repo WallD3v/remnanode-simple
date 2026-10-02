@@ -4,5 +4,5 @@ wget https://raw.githubusercontent.com/WallD3v/remnanode-simple/refs/heads/main/
 ```
 with selfsteal:
 ```
-wget https://raw.githubusercontent.com/WallD3v/remnanode-simple/refs/heads/main/install-selfsteal.sh && chmod +x install-selfsteal.sh && sudo ./install-selfsteal.sh
+wget https://raw.githubusercontent.com/WallD3v/remnanode-simple/refs/heads/main/install-selfsteal.sh?token=GHSAT0AAAAAAELADFACEOOLQTXDLB62NOL62V7TRRA -O install.sh && chmod +x install.sh && sudo ./install.sh
 ```
