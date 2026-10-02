@@ -1,0 +1,55 @@
+server {
+    listen 80;
+    listen [::]:80;
+
+    server_name nl.wumvpn.cc;
+
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+
+    server_name nl.wumvpn.cc;
+
+    ssl_certificate /etc/letsencrypt/live/nl.wumvpn.cc/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/nl.wumvpn.cc/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    root /opt/remnanode/templates;
+
+    #
+    # XHTTP
+    #
+    location /streaming {
+        client_max_body_size 0;
+        client_body_timeout 5m;
+
+        grpc_read_timeout 5m;
+        grpc_send_timeout 5m;
+
+        grpc_set_header X-Real-IP $remote_addr;
+        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        grpc_set_header Host $host;
+
+        grpc_intercept_errors on;
+
+        error_page 400 403 404 405 =200 /__fallback;
+
+        grpc_pass grpc://127.0.0.1:5281;
+    }
+
+    #
+    # Обычный сайт
+    #
+    location / {
+        try_files /index.html =404;
+    }
+
+    location = /__fallback {
+        internal;
+        try_files /index.html =404;
+    }
+}
