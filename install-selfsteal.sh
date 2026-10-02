@@ -5,8 +5,8 @@ set -e
 REMNANODE_DIR="/opt/remnanode"
 TEMPLATES_DIR="$REMNANODE_DIR/templates"
 
-INDEX_URL="https://raw.githubusercontent.com/WallD3v/remnanode-simple/refs/heads/main/templates/index.html?token=GHSAT0AAAAAAELADFACT73GSZKQPW2OAA5K2V7TQVA"
-NGINX_URL="https://raw.githubusercontent.com/WallD3v/remnanode-simple/refs/heads/main/templates/default?token=GHSAT0AAAAAAELADFACHXX2S5H2ODUODHEG2V7TRFQ"
+INDEX_URL="https://raw.githubusercontent.com/WallD3v/remnanode-simple/refs/heads/main/templates/index.html"
+NGINX_URL="https://raw.githubusercontent.com/WallD3v/remnanode-simple/refs/heads/main/templates/default"
 
 NGINX_CONFIG="/etc/nginx/sites-available/default"
 
